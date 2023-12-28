@@ -109,6 +109,21 @@ class ElegooNextionAdapter(
         return action
     }
 
+    fun sendAction(action: NextionAction) {
+        val buffer = LinkedList<UByte>()
+        buffer.add(HEADER_1)
+        buffer.add(HEADER_2)
+        buffer.add((1 + 2 + 1 + (action.data.size * 2)).toUByte())
+        buffer.add(action.command.command)
+        buffer.add((action.address.address.toInt() ushr 8).toUByte())
+        buffer.add((action.address.address.toInt() and 0xFF).toUByte())
+        buffer.add(action.data.size.toUByte())
+        action.data.forEach {
+            buffer.add((it.toInt() ushr 8).toUByte())
+            buffer.add((it.toInt() and 0xFF).toUByte())
+        }
+    }
+
     fun destroy() {
         scope.cancel()
     }
