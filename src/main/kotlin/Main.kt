@@ -32,6 +32,10 @@ fun main() = runBlocking {
     launch {
         nextionAdapter.commandReader.consumeAsFlow().collect {
             printWithDate("[FROM DISPLAY] $it")
+            if (it is LcdRecoveryAction) {
+                printWithDate("LCD recovery request received, switching to main page")
+                robinNanoAdapter.sendCommand("page main")
+            }
         }
     }
 

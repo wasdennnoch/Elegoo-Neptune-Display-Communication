@@ -66,20 +66,48 @@ class ElegooNextionAdapter(
                 val targetLengthInBytes = (targetLengthInWords - 3) * 2
                 // println("Buffer size is ${buffer.size}, target length is $targetLengthInBytes")
                 if (buffer.size == 3 + targetLengthInBytes) {
-                    val address = littleToBigEndian(buffer[4], buffer[5])
-                    val data = buffer.subList(7, buffer.size).chunked(2).map { littleToBigEndian(it[0], it[1]) }
-                    // println("Assembling action with data $data")
-                    val action = NextionAction(
-                        NextionDatagramCommand.from(buffer[3]),
-                        NextionDatagramAddressKey.from(address),
-                        data,
-                    )
-                    _commandReader.send(action)
+                    prepareAndDispatchIncomingAction()
                     buffer.clear()
                     readState = ReadState.IDLE
                 }
             }
         }
+    }
+
+    private suspend fun prepareAndDispatchIncomingAction() {
+        val command = buffer[3]
+        val address = littleToBigEndian(buffer[4], buffer[5])
+        val data = buffer.subList(7, buffer.size).chunked(2).map { littleToBigEndian(it[0], it[1]) }
+        // println("Assembling action with data $data")
+        val action = try {
+            assembleIncomingAction(
+                NextionDatagramCommand.from(command),
+                NextionDatagramAddressKey.from(address),
+                data,
+            )
+        } catch (e: Exception) {
+            println("Failed to assemble incoming action: $e")
+            return
+        }
+        _commandReader.send(action)
+    }
+
+    private fun assembleIncomingAction(
+        command: NextionDatagramCommand,
+        address: NextionDatagramAddressKey,
+        data: List<UShort>,
+    ): NextionAction {
+        if (command != NextionDatagramCommand.VAR_ADDR_READ) {
+            throw IllegalArgumentException("Only VAR_ADDR_READ is supported for incoming actions, but got command=$command, address=$address, data=$data")
+        }
+
+        if (data.isEmpty()) {
+            throw IllegalArgumentException("Incoming action doesn't have any data: command=$command, address=$address, data=$data")
+        }
+
+        val action = ActionRegistry.getAction(address, data)
+        requireNotNull(action) { "No action found for command=$command, address=$address, data=$data" }
+        return action
     }
 
     fun destroy() {
@@ -92,6 +120,9 @@ class ElegooNextionAdapter(
 
 }
 
+private const val HEADER_1: UByte = 0x5Au
+private const val HEADER_2: UByte = 0xA5u
+
 private enum class ReadState {
     IDLE,
     HEADER_1_SEEN,
@@ -99,8 +130,6 @@ private enum class ReadState {
     WAIT_TELEGRAM,
 }
 
-private const val HEADER_1: UByte = 0x5Au
-private const val HEADER_2: UByte = 0xA5u
 
 /*
 Command Struct:
@@ -133,14 +162,14 @@ data[4] = addr >> 8
 data[5] = addr & 0xFF
 */
 
-class NextionAction(
+abstract class NextionAction(
     val command: NextionDatagramCommand,
     val address: NextionDatagramAddressKey,
     val data: List<UShort>,
 ) {
 
     override fun toString(): String {
-        return "NextionAction(command=$command, address=$address, data=$data)"
+        return "${javaClass.simpleName}(command=$command, address=$address, data=$data)"
     }
 
 }
@@ -216,4 +245,98 @@ enum class NextionDatagramAddressKey(val address: UShort) {
         }
 
     }
+}
+
+private object ActionRegistry {
+
+    private val singleWordActions: MutableMap<NextionDatagramAddressKey, MutableMap<UShort, NextionAction>> =
+        EnumMap(NextionDatagramAddressKey::class.java)
+
+    init {
+        // MAIN_PAGE
+        preregisterAction(OpenFileListAction())
+        preregisterAction(RemoveFileListMultilineFlagAction())
+        preregisterAction(SetFileListMultilineFlagAction())
+
+        // TEMP_SCREEN
+        preregisterAction(SetUnitMultiplier1Action())
+        preregisterAction(SetUnitMultiplier2Action())
+        preregisterAction(SetUnitMultiplier3Action())
+
+        // COOL_SCREEN
+        preregisterAction(DisableNozzle0HeatingAction())
+        preregisterAction(DisableBedHeatingAction())
+        preregisterAction(PreheatPlaAction())
+        preregisterAction(PreheatAbsAction())
+        preregisterAction(PreheatPetgAction())
+        preregisterAction(PreheatTpuAction())
+
+        // SETTING_SCREEN
+        preregisterAction(TriggerAutohomeAction())
+        preregisterAction(StopMotorsAction())
+        preregisterAction(NavigateToPretempPageAction())
+        preregisterAction(NavigateToPrefilamentPageAction())
+
+        // SETTING_BACK
+        preregisterAction(SaveSettingsAction())
+
+        // BED_LEVEL_FUN
+        preregisterAction(RequestTemperaturesAction())
+        preregisterAction(LcdRecoveryAction())
+
+        // AXIS_PAGE_SELECT
+        preregisterAction(HomeAllAction())
+        preregisterAction(HomeXAction())
+        preregisterAction(HomeYAction())
+        preregisterAction(HomeZAction())
+
+        // X_AXIS_MOVE
+        preregisterAction(MoveXAxisPlusAction())
+        preregisterAction(MoveXAxisMinusAction())
+
+        // Y_AXIS_MOVE
+        preregisterAction(MoveYAxisPlusAction())
+        preregisterAction(MoveYAxisMinusAction())
+
+        // Z_AXIS_MOVE
+        preregisterAction(MoveZAxisPlusAction())
+        preregisterAction(MoveZAxisMinusAction())
+
+        // FILAMENT_LOAD
+        preregisterAction(UnloadFilamentAction())
+        preregisterAction(LoadFilamentAction())
+
+        // HARDWARE_TEST
+        preregisterAction(DetectHardwareTestAction())
+    }
+
+    private fun preregisterAction(action: NextionAction) {
+        require(action.data.size == 1) { "Only actions with a single data word can be preregistered" }
+        singleWordActions.computeIfAbsent(action.address) { HashMap() }[action.data.first()] = action
+    }
+
+    fun getAction(address: NextionDatagramAddressKey, data: List<UShort>): NextionAction? {
+        if (data.size == 1) {
+            singleWordActions[address]?.get(data.first())?.let {
+                return it
+            }
+        }
+
+        if (data.size == 1) {
+            val dataWord = data.first()
+            return when (address) {
+                NextionDatagramAddressKey.HEATER_0_TEMP_ENTER -> SetNozzle0TemperatureAction(dataWord)
+                NextionDatagramAddressKey.HOT_BED_TEMP_ENTER -> SetBedTemperatureAction(dataWord)
+                NextionDatagramAddressKey.HEATER_0_LOAD_ENTER -> SetPrefilamentLoadLengthAction(dataWord)
+                NextionDatagramAddressKey.HEATER_1_LOAD_ENTER -> SetPrefilamentLoadSpeedAction(dataWord)
+                else -> null
+            }
+        }
+        return null
+    }
+
+}
+
+fun swapEndianess(word: UShort): UShort {
+    return (((word and 0xFF00u).toInt() ushr 8) or ((word and 0x00FFu).toInt() shl 8)).toUShort()
 }
