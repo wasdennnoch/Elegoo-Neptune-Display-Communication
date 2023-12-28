@@ -62,10 +62,9 @@ class ElegooNextionAdapter(
 
             ReadState.WAIT_TELEGRAM -> {
                 buffer.add(byte)
-                val targetLengthInWords = buffer[2].toInt()
-                val targetLengthInBytes = (targetLengthInWords - 3) * 2
+                val targetLengthInBytes = buffer[2].toInt() + 3
                 // println("Buffer size is ${buffer.size}, target length is $targetLengthInBytes")
-                if (buffer.size == 3 + targetLengthInBytes) {
+                if (buffer.size == targetLengthInBytes) {
                     prepareAndDispatchIncomingAction()
                     buffer.clear()
                     readState = ReadState.IDLE
