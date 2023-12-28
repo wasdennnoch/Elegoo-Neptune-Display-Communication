@@ -337,16 +337,26 @@ private object ActionRegistry {
         }
 
         if (data.size == 1) {
-            val dataWord = data.first()
+            val word = data.first()
             return when (address) {
-                NextionDatagramAddressKey.HEATER_0_TEMP_ENTER -> SetNozzle0TemperatureAction(dataWord)
-                NextionDatagramAddressKey.HOT_BED_TEMP_ENTER -> SetBedTemperatureAction(dataWord)
-                NextionDatagramAddressKey.HEATER_0_LOAD_ENTER -> SetPrefilamentLoadLengthAction(dataWord)
-                NextionDatagramAddressKey.HEATER_1_LOAD_ENTER -> SetPrefilamentLoadSpeedAction(dataWord)
+                NextionDatagramAddressKey.HEATER_0_TEMP_ENTER -> SetNozzle0TemperatureAction(word)
+                NextionDatagramAddressKey.HOT_BED_TEMP_ENTER -> SetBedTemperatureAction(word)
+                NextionDatagramAddressKey.HEATER_0_LOAD_ENTER -> SetPrefilamentLoadLengthAction(word)
+                NextionDatagramAddressKey.HEATER_1_LOAD_ENTER -> SetPrefilamentLoadSpeedAction(word)
                 else -> null
             }
         }
-        return null
+
+        return when (address) {
+            NextionDatagramAddressKey.SETTING_BACK -> {
+                when (data[0]) {
+                    (7u).toUShort() -> SetLcdVersionAction(data)
+                    else -> null
+                }
+            }
+
+            else -> null
+        }
     }
 
 }

@@ -17,7 +17,11 @@ abstract class SingleWordAction(
 ) : ReadAction(
     address,
     listOf(data),
-)
+) {
+    override fun toString(): String {
+        return "${javaClass.simpleName}()"
+    }
+}
 
 abstract class NumericInputAction(
     address: NextionDatagramAddressKey,
@@ -149,6 +153,20 @@ class SaveSettingsAction : SingleWordAction(
     SETTING_BACK,
     5u,
 )
+
+// 0x07
+class SetLcdVersionAction(
+    data: List<UShort>,
+) : ReadAction(
+    SETTING_BACK,
+    data,
+) {
+    val version: UShort = data[1]
+
+    override fun toString(): String {
+        return "${javaClass.simpleName}(version=$version)"
+    }
+}
 
 /* --- BED_LEVEL_FUN --- */
 
