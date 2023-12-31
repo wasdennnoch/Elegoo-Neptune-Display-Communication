@@ -2,7 +2,7 @@ package n3p
 
 import n3p.NextionDatagramAddressKey.*
 
-abstract class ReadAction(
+open class ReadAction(
     address: NextionDatagramAddressKey,
     data: List<UShort>,
 ) : NextionAction(
@@ -11,7 +11,7 @@ abstract class ReadAction(
     data,
 )
 
-abstract class SingleWordAction(
+open class SingleWordAction(
     address: NextionDatagramAddressKey,
     data: UShort,
 ) : ReadAction(
@@ -23,7 +23,7 @@ abstract class SingleWordAction(
     }
 }
 
-abstract class NumericInputAction(
+open class NumericInputAction(
     address: NextionDatagramAddressKey,
     data: UShort,
 ) : ReadAction(

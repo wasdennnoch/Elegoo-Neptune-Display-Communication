@@ -176,7 +176,7 @@ data[4] = addr >> 8
 data[5] = addr & 0xFF
 */
 
-abstract class NextionAction(
+open class NextionAction(
     val command: NextionDatagramCommand,
     val address: NextionDatagramAddressKey,
     val data: List<UShort>,
@@ -334,9 +334,7 @@ private object ActionRegistry {
             singleWordActions[address]?.get(data.first())?.let {
                 return it
             }
-        }
 
-        if (data.size == 1) {
             val word = data.first()
             return when (address) {
                 NextionDatagramAddressKey.HEATER_0_TEMP_ENTER -> SetNozzle0TemperatureAction(word)
@@ -347,16 +345,20 @@ private object ActionRegistry {
             }
         }
 
-        return when (address) {
-            NextionDatagramAddressKey.SETTING_BACK -> {
-                when (data[0]) {
-                    (7u).toUShort() -> SetLcdVersionAction(data)
-                    else -> null
+        if (data.size == 2) {
+            return when (address) {
+                NextionDatagramAddressKey.SETTING_BACK -> {
+                    when (data[0]) {
+                        (7u).toUShort() -> SetLcdVersionAction(data)
+                        else -> null
+                    }
                 }
-            }
 
-            else -> null
+                else -> null
+            }
         }
+
+        return null
     }
 
 }
