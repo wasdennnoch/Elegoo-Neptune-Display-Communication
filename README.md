@@ -1,5 +1,8 @@
 # ElegooDisplayComms
 
+> [!NOTE]
+> Archived in favor of [OpenNept4une](https://github.com/OpenNeptune3D/display_connector), which is a) written in Python for easy deployment, b) is made for the more advanced Neptune 4 series displays (you can just flash the N4 firmware onto your N3 display), and c) is way more developed and has way more features (some of them fully custom!) than this project.
+
 An attempt at reverse-engineering and reimplementing the communication protocol
 used by external displays of the Elegoo Neptune 3 (Pro) 3D Printer series.
 
